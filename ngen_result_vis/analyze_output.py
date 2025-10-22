@@ -2,17 +2,11 @@ import os, sys
 import pandas as pd
 import numpy as np
 from pathlib import Path
-import re
-import matplotlib.pyplot as plt
 
-# this_dir=$(dirname $0)
-# # temp/AWI_16_2853886_006/outputs
-# output_dir="${this_dir}/temp/AWI_16_2853886_006/outputs"
 this_dir = Path(sys.argv[0]).parent
 print(f"this_dir: {this_dir}")
 output_dir = this_dir / "temp/AWI_16_2853886_006/outputs/ngen/"
 print(f"target_dir: {output_dir}, exists: {output_dir.exists()}")
-# forcing_dir="${this_dir}/temp/AWI_16_2853886_006/forcings/by_catchment"
 forcing_dir = this_dir / "temp/AWI_16_2853886_006/forcings/by_catchment"
 print(f"forcing_dir: {forcing_dir}, exists: {forcing_dir.exists()}")
 
