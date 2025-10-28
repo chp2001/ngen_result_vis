@@ -405,7 +405,7 @@ if __name__ == '__main__':
                 if item not in total:
                     total[Path(item).stem] = pd.read_csv(item)
         return total
-    target_dir = Path.home() / "NGIAB-CloudInfra" / "temp" / "AWI_16_2853886_006" / "forcings" / "by_catchment"
+    target_dir = Path.home() / "NGIAB-CloudInfra-old" / "temp" / "AWI_16_2853886_006" / "forcings" / "by_catchment"
     output_data = get_data(target_dir, {})
     group_count = len(output_data)
     group_size = len(next(iter(output_data.values())))
@@ -462,7 +462,8 @@ if __name__ == '__main__':
         group_count=group_count,
         group_size=group_size,
     )
-    data_series = []
+    # data_series = []
+    data_series: List[np.ndarray] = []
     for catchment_name, df in output_data.items():
         series = df['precip_rate'].to_numpy()
         data_series.append(series)
@@ -473,6 +474,7 @@ if __name__ == '__main__':
         rgba = cmap(norm(value))
         return tuple(int(c * 255) for c in rgba[:3])
     # Draw the data into the image frame
+    print("Drawing data into image frame...")
     for col_index in range(group_count):
         col_series = [data_series[col_index], data_series[col_index]]  # Assuming two cells per slot for simplicity
         data_img = draw_serieses_to_image_frame_column(
@@ -487,3 +489,58 @@ if __name__ == '__main__':
     if not os.path.exists("dist"):
         os.makedirs("dist")
     data_img.save("dist/ngen_output_example.png")
+    print("Saved example image to dist/ngen_output_example.png")
+    
+    # Demonstrate ability to compare different datasets
+    # by making shifted versions of the data
+    def make_shifted_data(data: List[np.ndarray], shift_amount: int) -> List[np.ndarray]:
+        if shift_amount == 0:
+            return [s.copy() for s in data]
+        shifted_data = []
+        for series in data:
+            shifted_series = np.roll(series, shift_amount)
+            shifted_data.append(shifted_series)
+        return shifted_data
+    data_serieses = []
+    shifts = [0, 5, 10, 20]
+    for shift in shifts:
+        shifted_data = make_shifted_data(data_series, shift)
+        data_serieses.append(shifted_data)
+    # Create a larger image to hold all the datasets
+    # (Done by increasing the width grid to match the number of datasets)
+    comparison_group_count = group_count
+    comparison_slot_size = calc_slot_size(width_grid=len(shifts))
+    comparison_column_size = calc_column_size(
+        group_size=group_size,
+        slot_size=comparison_slot_size,
+    )
+    comparison_total_image_size = calc_total_image_size(
+        group_count=comparison_group_count,
+        column_size=comparison_column_size,
+    )
+    comparison_img = Image.new("RGB", comparison_total_image_size, color=colors["background"])
+    comparison_draw = ImageDraw.Draw(comparison_img)
+    comparison_img, comparison_draw, comparison_cell_bboxes = draw_image_frame(
+        comparison_img,
+        comparison_draw,
+        group_count=comparison_group_count,
+        group_size=group_size,
+        width_grid=len(shifts),
+    )
+    # Draw each dataset into the comparison image
+    print("Drawing comparison data into image frame...")
+    for col_index in range(comparison_group_count):
+        col_serieses = []
+        for shift_index in range(len(shifts)):
+            col_serieses.append(data_serieses[shift_index][col_index])
+        comparison_img = draw_serieses_to_image_frame_column(
+            comparison_img,
+            comparison_draw,
+            col_index,
+            comparison_cell_bboxes,
+            col_serieses,
+            color_mapping,
+        )
+    # comparison_img.show()
+    comparison_img.save("dist/ngen_output_comparison_example.png")
+    print("Saved comparison image to dist/ngen_output_comparison_example.png")
