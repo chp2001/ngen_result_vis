@@ -12,6 +12,8 @@ import math
 import PIL
 from PIL import Image, ImageDraw, ImageFont
 
+import time
+
 # Attempting to convert the image code from the original `analyze_output.py`
 # into a more self-contained and coherent form.
 
@@ -382,6 +384,7 @@ def draw_serieses_to_image_frame_column(
     
     Assumes the number of serieses corresponds to the number of cells per slot.
     """
+    t0 = time.perf_counter()
     for slot_index, slot_series in enumerate(serieses):
         for index, value in enumerate(slot_series):
             cell_index = index * len(serieses) + slot_index
@@ -391,6 +394,12 @@ def draw_serieses_to_image_frame_column(
                 [(cell_bbox[0], cell_bbox[1]), (cell_bbox[2], cell_bbox[3])],
                 fill=cell_color,
             )
+    t1 = time.perf_counter()
+    dt = t1 - t0
+    if dt > 1.0:
+        per_series = dt / len(serieses)
+        per_cell = dt / sum(len(s) for s in serieses)
+        print(f"Drew column {column_index} with {len(serieses)} series in {dt:.4f} s ({per_series:.6f} s/series, {per_cell:.6f} s/cell)")
     return img
     
 if __name__ == '__main__':
@@ -475,6 +484,9 @@ if __name__ == '__main__':
         return tuple(int(c * 255) for c in rgba[:3])
     # Draw the data into the image frame
     print("Drawing data into image frame...")
+    t0 = time.perf_counter()
+    last_time = t0
+    last_index = 0
     for col_index in range(group_count):
         col_series = [data_series[col_index], data_series[col_index]]  # Assuming two cells per slot for simplicity
         data_img = draw_serieses_to_image_frame_column(
@@ -485,6 +497,24 @@ if __name__ == '__main__':
             col_series,
             color_mapping,
         )
+        current_time = time.perf_counter()
+        dt = current_time - last_time
+        if dt > 1.0:
+            num_completed = col_index - last_index + 1
+            per_col = dt / num_completed
+            est_remaining = per_col * (group_count - col_index - 1)
+            print(f"  Drew columns {last_index} to {col_index} ({num_completed}) in {dt:.4f} s ({per_col:.4f} s/col), estimated remaining time: {est_remaining:.2f} s")
+            last_time = current_time
+            last_index = col_index + 1
+    t1 = time.perf_counter()
+    if last_index < group_count:
+        dt = t1 - last_time
+        num_completed = group_count - last_index
+        per_col = dt / num_completed
+        print(f"  Drew columns {last_index} to {group_count - 1} ({num_completed}) in {dt:.4f} s ({per_col:.4f} s/col)")
+    total_dt = t1 - t0
+    print(f"Drew all {group_count} columns in {total_dt:.4f} s")
+    # Previously: 14.5290 s for 229 columns
     # data_img.show()
     if not os.path.exists("dist"):
         os.makedirs("dist")
@@ -509,14 +539,23 @@ if __name__ == '__main__':
     # Create a larger image to hold all the datasets
     # (Done by increasing the width grid to match the number of datasets)
     comparison_group_count = group_count
-    comparison_slot_size = calc_slot_size(width_grid=len(shifts))
+    comparison_kwargs = { # Enumerate only the changed parameters
+        "width_grid": len(shifts),
+        "horiz_divider_width": 0,
+        "vert_divider_width": 0,
+        "vert_padding": 1,
+    }
+    comparison_slot_size = calc_slot_size(**comparison_kwargs)
+    
     comparison_column_size = calc_column_size(
         group_size=group_size,
         slot_size=comparison_slot_size,
+        **comparison_kwargs,
     )
     comparison_total_image_size = calc_total_image_size(
         group_count=comparison_group_count,
         column_size=comparison_column_size,
+        **comparison_kwargs,
     )
     comparison_img = Image.new("RGB", comparison_total_image_size, color=colors["background"])
     comparison_draw = ImageDraw.Draw(comparison_img)
@@ -525,10 +564,13 @@ if __name__ == '__main__':
         comparison_draw,
         group_count=comparison_group_count,
         group_size=group_size,
-        width_grid=len(shifts),
+        **comparison_kwargs,
     )
     # Draw each dataset into the comparison image
     print("Drawing comparison data into image frame...")
+    t2 = time.perf_counter()
+    last_time = t2
+    last_index = 0
     for col_index in range(comparison_group_count):
         col_serieses = []
         for shift_index in range(len(shifts)):
@@ -541,6 +583,24 @@ if __name__ == '__main__':
             col_serieses,
             color_mapping,
         )
+        current_time = time.perf_counter()
+        dt = current_time - last_time
+        if dt > 1.0:
+            num_completed = col_index - last_index + 1
+            per_col = dt / num_completed
+            est_remaining = per_col * (comparison_group_count - col_index - 1)
+            print(f"  Drew columns {last_index} to {col_index} ({num_completed}) in {dt:.4f} s ({per_col:.4f} s/col), estimated remaining time: {est_remaining:.2f} s")
+            last_time = current_time
+            last_index = col_index + 1
+    t3 = time.perf_counter()
+    total_dt = t3 - t2
+    if last_index < comparison_group_count:
+        dt = t3 - last_time
+        num_completed = comparison_group_count - last_index
+        per_col = dt / num_completed
+        print(f"  Drew columns {last_index} to {comparison_group_count - 1} ({num_completed}) in {dt:.4f} s ({per_col:.4f} s/col)")
+    print(f"Drew all {comparison_group_count} columns in {total_dt:.4f} s")
+    # Previously: 27.9437 s for 229 columns with 4 datasets
     # comparison_img.show()
     comparison_img.save("dist/ngen_output_comparison_example.png")
     print("Saved comparison image to dist/ngen_output_comparison_example.png")
